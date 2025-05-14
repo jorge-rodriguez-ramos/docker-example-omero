@@ -1,17 +1,26 @@
 import omero
 from omero.gateway import BlitzGateway
 
-# Replace with your OMERO connection details
-hostname = 'your_omero_server'
-port = 4064
-username = 'your_username'
-password = 'your_password'
-dataset_id = 123  # Change to value asked to user of provided in CLI
+import yaml
+import sys
 
-# Define the new pixel size values (in microns, for example)
-new_pixel_size_x = 0.0248
-new_pixel_size_y = 0.0248
-new_pixel_size_z = 1.0
+# OMERO connection details
+hostname = 'localhost'
+port = 4064
+with open('/home/jrr/Documents/docker-example-omero/jrr_scripts/secret.yaml', 'r') as file:
+    credentials = yaml.safe_load(file)
+username = credentials.get('USER1')
+password = credentials.get('PASSWORD1')
+
+# Read dataset ID from stdin
+try:
+    dataset_id = int(input("Enter the Dataset ID: "))
+except ValueError:
+    print("Invalid input. Please enter a numeric Dataset ID.")
+    sys.exit(1)
+
+# Define the new pixel size 
+new_pixel_size = omero.model.LengthI(24.8, omero.model.enums.UnitsLength.NANOMETER)
 
 conn = None
 try:
@@ -19,44 +28,46 @@ try:
     conn = BlitzGateway(username, password, host=hostname, port=port)
     conn.connect()
 
-    # Get the Dataset
+    # Get the dataset
     dataset = conn.getObject('Dataset', dataset_id)
     if not dataset:
         print(f"Dataset with ID {dataset_id} not found.")
         exit()
 
-    # Iterate through the Images in the Dataset
+    # Show dataset info
+    print(f'User: {conn.getUser().getFullName()}')
+    print(f'Dataset group: {dataset.getDetails().getGroup().getName()}')
+    project = dataset.getParent()
+    if project:
+        print(f'Dataset project: {project.getName()}')
+    else:
+        print('Dataset is not associated with any project.')
+    print(f'Dataset name: {dataset.getName()}')
+    
+    # Warn the user about the pixel size modification
+    confirmation = input(f"Warning: The pixel size for Dataset ID {dataset_id} will be modified to 24.8 nm. Continue? [y,N]: ").strip().lower()
+    if confirmation != 'y':
+        print("Operation canceled by the user.")
+        sys.exit(0)
+
+
+    # Change pixel size in all the dataset
     for image in dataset.listChildren():
         print(f"Processing Image: {image.getName()}")
         pixels = image.getPrimaryPixels()
         if pixels:
-            # Get the existing PhysicalSizeX, PhysicalSizeY, and PhysicalSizeZ objects
-            physical_size_x = pixels.getPhysicalSizeX(unit=None)
-            physical_size_y = pixels.getPhysicalSizeY(unit=None)
-            physical_size_z = pixels.getPhysicalSizeZ(unit=None)
+            # Get the existing PhysicalSizeX
+            physical_size_x = pixels.getPhysicalSizeX()
+            physical_size_y = pixels.getPhysicalSizeY()
 
-            # Check if the physical sizes are already set (can be None)
-            if physical_size_x is not None:
-                physical_size_x.setValue(new_pixel_size_x)
-                pixels.setPhysicalSizeX(physical_size_x)
-            else:
-                pixels.setPhysicalSizeX(new_pixel_size_x)
+            # Update the values to 24.8 nm       
+            pixels.setPhysicalSizeX(new_pixel_size)
+            pixels.setPhysicalSizeY(new_pixel_size)
 
-            if physical_size_y is not None:
-                physical_size_y.setValue(new_pixel_size_y)
-                pixels.setPhysicalSizeY(physical_size_y)
-            else:
-                pixels.setPhysicalSizeY(new_pixel_size_y)
-
-            if physical_size_z is not None:
-                physical_size_z.setValue(new_pixel_size_z)
-                pixels.setPhysicalSizeZ(physical_size_z)
-            else:
-                pixels.setPhysicalSizeZ(new_pixel_size_z)
-
-            # Save the changes to the Pixels object
+            # Save the changes
             pixels.save()
-            print(f"  Pixel size updated for Image: {image.getName()}")
+            
+
         else:
             print(f"  No Pixels object found for Image: {image.getName()}")
 
