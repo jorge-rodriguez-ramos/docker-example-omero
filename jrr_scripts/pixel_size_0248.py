@@ -7,7 +7,7 @@ import sys
 # OMERO connection details
 hostname = 'localhost'
 port = 4064
-with open('/home/jrr/Documents/docker-example-omero/jrr_scripts/secret.yaml', 'r') as file:
+with open('jrr_scripts/secret.yaml', 'r') as file:
     credentials = yaml.safe_load(file)
 username = credentials.get('USER1')
 password = credentials.get('PASSWORD1')
